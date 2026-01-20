@@ -120,7 +120,8 @@ export interface Detection {
   created_at: string; // Server received timestamp
   updated_at: string;
   numberplate_available: boolean | null;
-  numberplate_color: NumberplateColor | null; // numberplate_text removed as requested
+  numberplate_text: string | null; // Extracted numberplate text
+  numberplate_color: NumberplateColor | null;
   vehicle_side: VehicleSide | null;
   llm_confidence: string | null;
   llm_reasoning?: string | null; // LLM raw response

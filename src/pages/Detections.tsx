@@ -273,6 +273,9 @@ export default function Detections() {
                       Activity
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Numberplate
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       Camera
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -327,6 +330,17 @@ export default function Detections() {
                             <ArrowUpCircle className="h-4 w-4" />
                             <span className="text-sm font-medium">OUT</span>
                           </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm">—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {detection.numberplate_text ? (
+                          <div className="font-mono text-sm font-semibold text-gray-900 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 inline-block">
+                            {detection.numberplate_text}
+                          </div>
+                        ) : detection.numberplate_available === false ? (
+                          <span className="text-xs text-gray-500 italic">Not visible</span>
                         ) : (
                           <span className="text-gray-400 text-sm">—</span>
                         )}
@@ -523,7 +537,17 @@ export default function Detections() {
                   <div>
                     <label className="text-xs text-gray-500 uppercase">Number Plate</label>
                     <div className="mt-1">
-                      {selectedImage.numberplate_available ? (
+                      {selectedImage.numberplate_text ? (
+                        <div className="space-y-2">
+                          <div className="font-mono text-lg font-bold text-gray-900 bg-gray-50 px-4 py-2 rounded-lg border-2 border-gray-300 inline-block">
+                            {selectedImage.numberplate_text}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Color: <span className="capitalize">{selectedImage.numberplate_color || 'Unknown'}</span> •
+                            Side: <span className="capitalize">{selectedImage.vehicle_side || 'Unknown'}</span>
+                          </div>
+                        </div>
+                      ) : selectedImage.numberplate_available ? (
                         <div className="text-sm text-gray-600">
                           Color: <span className="capitalize">{selectedImage.numberplate_color || 'Unknown'}</span> •
                           Side: <span className="capitalize">{selectedImage.vehicle_side || 'Unknown'}</span>
