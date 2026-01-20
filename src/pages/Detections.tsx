@@ -622,6 +622,17 @@ export default function Detections() {
                       </div>
                     </div>
                   )}
+
+                  {selectedImage.llm_reasoning && (
+                    <div>
+                      <label className="text-xs text-gray-500 uppercase">LLM Reasoning</label>
+                      <div className="mt-1 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed">
+                          {selectedImage.llm_reasoning}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
