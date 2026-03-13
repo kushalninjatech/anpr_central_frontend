@@ -29,7 +29,7 @@ const getApiBaseUrl = () => {
   return (import.meta as any).env?.VITE_API_URL || 'http://localhost:8010';
 };
 
-const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
 const API_V1_PREFIX = '/api/v1';
 
 const api = axios.create({
@@ -43,10 +43,8 @@ const api = axios.create({
 export const setApiToken = (token: string | null) => {
   if (token) {
     api.defaults.headers.common['X-API-Token'] = token;
-    console.log('API Token set:', token.substring(0, 10) + '...');
   } else {
     delete api.defaults.headers.common['X-API-Token'];
-    console.log('API Token cleared');
   }
 };
 
@@ -60,16 +58,10 @@ if (typeof window !== 'undefined') {
 
 // Add axios interceptor to ensure token is always included
 api.interceptors.request.use((config) => {
-  // Always try to get token from localStorage for each request
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('api_token');
-    console.log('Interceptor - checking token:', token ? token.substring(0, 10) + '...' : 'NO TOKEN FOUND');
-    console.log('Interceptor - current headers:', config.headers);
     if (token) {
       config.headers['X-API-Token'] = token;
-      console.log('Token added via interceptor:', token.substring(0, 10) + '...');
-    } else {
-      console.error('NO TOKEN IN LOCALSTORAGE!');
     }
   }
   return config;
@@ -79,14 +71,14 @@ api.interceptors.request.use((config) => {
 
 // Organization API
 export const organizationApi = {
-  getAll: (skip = 0, limit = 100) =>
-    api.get<OrganizationListResponse>(`${API_V1_PREFIX}/organizations/`, { params: { skip, limit } }),
+  getAll: (page = 1, pageSize = 100) =>
+    api.get<OrganizationListResponse>(`${API_V1_PREFIX}/organizations/`, { params: { page, page_size: pageSize } }),
 
   getById: (id: number) =>
     api.get<Organization>(`${API_V1_PREFIX}/organizations/${id}`),
 
-  search: (q: string, skip = 0, limit = 100) =>
-    api.get<OrganizationListResponse>(`${API_V1_PREFIX}/organizations/search`, { params: { q, skip, limit } }),
+  search: (q: string, page = 1, pageSize = 100) =>
+    api.get<OrganizationListResponse>(`${API_V1_PREFIX}/organizations/search`, { params: { q, page, page_size: pageSize } }),
 
   create: (data: OrganizationCreate) =>
     api.post<Organization>(`${API_V1_PREFIX}/organizations/`, data),
@@ -128,29 +120,30 @@ export const locationApi = {
 
 // Camera API
 export const cameraApi = {
-  getAll: (skip = 0, limit = 100, orgId?: number) =>
+  getAll: (page = 1, pageSize = 100, orgId?: number) =>
     api.get<CameraListResponse>(`${API_V1_PREFIX}/cameras/`, {
-      params: { skip, limit, org_id: orgId },
+      params: { page, page_size: pageSize, organization_id: orgId },
     }),
 
-  getById: (id: number) =>
-    api.get(`${API_V1_PREFIX}/cameras/${id}`),
-
-  getByOrganization: (orgId: number, skip = 0, limit = 100) =>
+  getByOrganization: (orgId: number, page = 1, pageSize = 100) =>
     api.get<CameraListResponse>(`${API_V1_PREFIX}/cameras/organization/${orgId}`, {
-      params: { skip, limit },
+      params: { page, page_size: pageSize },
     }),
 };
 
 // ANPR Detection API
 export const detectionApi = {
-  getAll: (skip = 0, limit = 100, statusFilter?: ProcessingStatus, cameraId?: string, orgId?: number) => {
-    const params: any = { skip, limit };
+  getAll: (page = 1, pageSize = 100, statusFilter?: ProcessingStatus, cameraId?: string, orgId?: number, startDate?: string, endDate?: string, activityType?: string, plate?: string) => {
+    const params: any = { page, page_size: pageSize };
     if (statusFilter) params.status_filter = statusFilter;
     if (cameraId) params.camera_id = cameraId;
     if (orgId) params.organization_id = orgId;
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    if (activityType) params.activity_type = activityType;
+    if (plate) params.plate = plate;
 
-    return api.get<Detection[]>(`${API_V1_PREFIX}/anpr/detections`, { params });
+    return api.get<{ detections: Detection[]; total: number }>(`${API_V1_PREFIX}/anpr/detections`, { params });
   },
 
   getById: (id: number) =>
@@ -186,9 +179,9 @@ export const adminApi = {
   getOrganizationStats: (orgId: number) =>
     api.get<OrganizationStats>(`${API_V1_PREFIX}/admin/organizations/${orgId}/stats`),
 
-  getSystemStats: (dateFilter = 'today') =>
+  getSystemStats: (dateFilter = 'today', orgId?: number) =>
     api.get<DashboardStats>(`${API_V1_PREFIX}/admin/stats`, {
-      params: { date_filter: dateFilter },
+      params: { date_filter: dateFilter, organization_id: orgId },
     }),
 };
 
@@ -205,34 +198,34 @@ export const healthApi = {
 
 // Analytics API
 export const analyticsApi = {
-  hourly: (startDate?: string, endDate?: string, orgId?: number) =>
+  hourly: (startDate?: string, endDate?: string, orgId?: number, cameraId?: string, activityType?: string, statusFilter?: string, plate?: string) =>
     api.get(`${API_V1_PREFIX}/analytics/hourly`, {
-      params: { start_date: startDate, end_date: endDate, organization_id: orgId },
+      params: { start_date: startDate, end_date: endDate, organization_id: orgId, camera_id: cameraId, activity_type: activityType, status_filter: statusFilter, plate },
     }),
 
-  daily: (days = 30, orgId?: number) =>
+  daily: (days = 30, orgId?: number, startDate?: string, endDate?: string, cameraId?: string, activityType?: string, statusFilter?: string, plate?: string) =>
     api.get(`${API_V1_PREFIX}/analytics/daily`, {
-      params: { days, organization_id: orgId },
+      params: { days, organization_id: orgId, start_date: startDate, end_date: endDate, camera_id: cameraId, activity_type: activityType, status_filter: statusFilter, plate },
     }),
 
-  weekly: (weeks = 12, orgId?: number) =>
+  weekly: (weeks = 12, orgId?: number, cameraId?: string, activityType?: string, statusFilter?: string, plate?: string) =>
     api.get(`${API_V1_PREFIX}/analytics/weekly`, {
-      params: { weeks, organization_id: orgId },
+      params: { weeks, organization_id: orgId, camera_id: cameraId, activity_type: activityType, status_filter: statusFilter, plate },
     }),
 
-  monthly: (months = 12, orgId?: number) =>
+  monthly: (months = 12, orgId?: number, cameraId?: string, activityType?: string, statusFilter?: string, plate?: string) =>
     api.get(`${API_V1_PREFIX}/analytics/monthly`, {
-      params: { months, organization_id: orgId },
+      params: { months, organization_id: orgId, camera_id: cameraId, activity_type: activityType, status_filter: statusFilter, plate },
     }),
 
-  vehicleTypes: (startDate?: string, endDate?: string, orgId?: number) =>
+  vehicleTypes: (startDate?: string, endDate?: string, orgId?: number, cameraId?: string, activityType?: string, statusFilter?: string, plate?: string) =>
     api.get(`${API_V1_PREFIX}/analytics/vehicle-types`, {
-      params: { start_date: startDate, end_date: endDate, organization_id: orgId },
+      params: { start_date: startDate, end_date: endDate, organization_id: orgId, camera_id: cameraId, activity_type: activityType, status_filter: statusFilter, plate },
     }),
 
-  cameraPerformance: (startDate?: string, endDate?: string, orgId?: number, limit = 10) =>
+  cameraPerformance: (startDate?: string, endDate?: string, orgId?: number, limit = 10, cameraId?: string, activityType?: string, statusFilter?: string, plate?: string) =>
     api.get(`${API_V1_PREFIX}/analytics/camera-performance`, {
-      params: { start_date: startDate, end_date: endDate, organization_id: orgId, limit },
+      params: { start_date: startDate, end_date: endDate, organization_id: orgId, limit, camera_id: cameraId, activity_type: activityType, status_filter: statusFilter, plate },
     }),
 };
 

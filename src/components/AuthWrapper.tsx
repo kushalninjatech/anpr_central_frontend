@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Key, Shield, User, Lock } from 'lucide-react';
 import { setApiToken } from '../services/api';
+import LoadingSpinner from './LoadingSpinner';
 
 interface AuthWrapperProps {
   children: React.ReactNode;
@@ -56,7 +57,7 @@ export default function AuthWrapper({ children }: AuthWrapperProps) {
   if (!isInitialized) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+        <LoadingSpinner size="lg" text="Initializing..." />
       </div>
     );
   }

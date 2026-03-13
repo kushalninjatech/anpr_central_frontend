@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import {
   MapPin,
@@ -15,6 +16,7 @@ import { locationApi, organizationApi } from '../services/api';
 import LocationModal from '../components/LocationModal';
 import ConfirmModal from '../components/ConfirmModal';
 import type { Location, LocationCreate, LocationUpdate } from '../types';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function Locations() {
   const queryClient = useQueryClient();
@@ -31,14 +33,18 @@ export default function Locations() {
 
   const { data: orgsData } = useQuery({
     queryKey: ['organizations'],
-    queryFn: () => organizationApi.getAll(0, 1000),
+    queryFn: () => organizationApi.getAll(1, 1000),
   });
 
   const createMutation = useMutation({
     mutationFn: (data: LocationCreate) => locationApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['locations'] });
+      toast.success('Location created successfully');
       setIsModalOpen(false);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Failed to create location');
     },
   });
 
@@ -47,8 +53,12 @@ export default function Locations() {
       locationApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['locations'] });
+      toast.success('Location updated successfully');
       setIsModalOpen(false);
       setSelectedLocation(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Failed to update location');
     },
   });
 
@@ -56,8 +66,12 @@ export default function Locations() {
     mutationFn: (id: number) => locationApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['locations'] });
+      toast.success('Location deleted successfully');
       setIsDeleteModalOpen(false);
       setSelectedLocation(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Failed to delete location');
     },
   });
 
@@ -110,7 +124,7 @@ export default function Locations() {
         <button
           onClick={handleAddNew}
           disabled={organizations.length === 0}
-          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="h-5 w-5" />
           Add Location
@@ -118,49 +132,47 @@ export default function Locations() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search locations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <select
-              value={selectedOrgFilter}
-              onChange={(e) => setSelectedOrgFilter(e.target.value ? parseInt(e.target.value) : '')}
-              className="pl-10 pr-8 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 appearance-none bg-white"
-            >
-              <option value="">All Organizations</option>
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </select>
-          </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search locations..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 shadow-sm"
+          />
+        </div>
+        <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm">
+          <Filter className="h-4 w-4 text-gray-400" />
+          <select
+            value={selectedOrgFilter}
+            onChange={(e) => setSelectedOrgFilter(e.target.value ? parseInt(e.target.value) : '')}
+            className="border-none bg-transparent text-sm font-medium text-gray-700 focus:outline-none focus:ring-0 min-w-[180px]"
+          >
+            <option value="">All Organizations</option>
+            {organizations.map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       {/* Locations Grid */}
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+          <LoadingSpinner size="lg" text="Loading locations..." />
         </div>
       ) : organizations.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl shadow-gray-200/50 border border-white/50 p-12 text-center">
           <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No organizations yet</h3>
           <p className="text-gray-500">Create an organization first before adding locations</p>
         </div>
       ) : filteredLocations.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl shadow-gray-200/50 border border-white/50 p-12 text-center">
           <MapPin className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No locations found</h3>
           <p className="text-gray-500 mb-4">
@@ -169,7 +181,7 @@ export default function Locations() {
           {!searchQuery && (
             <button
               onClick={handleAddNew}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+              className="btn btn-primary inline-flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
               Add Location
@@ -181,12 +193,12 @@ export default function Locations() {
           {filteredLocations.map((location) => (
             <div
               key={location.id}
-              className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow"
+              className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl border border-white/50 p-6 transition-all duration-300 hover:-translate-y-1"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="bg-emerald-50 p-2.5 rounded-xl">
-                    <MapPin className="h-6 w-6 text-emerald-600" />
+                  <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-2.5 rounded-xl shadow-lg">
+                    <MapPin className="h-6 w-6 text-white" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">{location.name}</h3>
@@ -194,9 +206,9 @@ export default function Locations() {
                   </div>
                 </div>
                 <span
-                  className={`px-2.5 py-1 text-xs font-medium rounded-full ${
+                  className={`badge ${
                     location.is_active
-                      ? 'bg-emerald-100 text-emerald-700'
+                      ? 'badge-success'
                       : 'bg-gray-100 text-gray-600'
                   }`}
                 >

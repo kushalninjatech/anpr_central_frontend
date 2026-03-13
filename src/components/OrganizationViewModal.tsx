@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { X, Building2, MapPin, FileText, Camera, Activity, Key, Copy, RefreshCw } from 'lucide-react';
+import { X, Building2, MapPin, FileText, Camera, Activity, Key, Copy, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { format } from 'date-fns';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { organizationApi } from '../services/api';
+import { toast } from 'react-toastify';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { organizationApi, adminApi } from '../services/api';
 import type { Organization } from '../types';
 
 interface OrganizationViewModalProps {
@@ -20,10 +21,21 @@ export default function OrganizationViewModal({
   const [showToken, setShowToken] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Fetch org stats for accurate camera/detection counts
+  const { data: orgStats } = useQuery({
+    queryKey: ['org-stats', organization?.id],
+    queryFn: () => adminApi.getOrganizationStats(organization!.id).then((res) => res.data),
+    enabled: isOpen && !!organization,
+  });
+
   const regenerateTokenMutation = useMutation({
     mutationFn: (id: number) => organizationApi.regenerateToken(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      toast.success('API token regenerated successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Failed to regenerate token');
     },
   });
 
@@ -84,7 +96,7 @@ export default function OrganizationViewModal({
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-blue-700">
-                    {organization.camera_count ?? 0}
+                    {orgStats?.camera_count ?? organization.camera_count ?? 0}
                   </p>
                   <p className="text-sm text-blue-600">Cameras</p>
                 </div>
@@ -97,7 +109,7 @@ export default function OrganizationViewModal({
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-emerald-700">
-                    {organization.detection_count ?? 0}
+                    {orgStats?.detection_count ?? organization.detection_count ?? 0}
                   </p>
                   <p className="text-sm text-emerald-600">Detections</p>
                 </div>
@@ -119,26 +131,31 @@ export default function OrganizationViewModal({
                     <div className="bg-white rounded-lg p-2 font-mono text-xs break-all border border-yellow-200">
                       {showToken ? organization.token : '•'.repeat(40)}
                     </div>
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center gap-2 mt-3">
                       <button
                         onClick={() => setShowToken(!showToken)}
-                        className="text-xs text-yellow-700 hover:text-yellow-800 font-medium"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
                       >
+                        {showToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                         {showToken ? 'Hide' : 'Show'}
                       </button>
                       <button
                         onClick={handleCopyToken}
-                        className="flex items-center gap-1 text-xs text-yellow-700 hover:text-yellow-800 font-medium"
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors ${
+                          copied
+                            ? 'text-emerald-700 bg-emerald-50'
+                            : 'text-blue-700 bg-blue-50 hover:bg-blue-100'
+                        }`}
                       >
-                        <Copy className="h-3 w-3" />
+                        <Copy className="h-3.5 w-3.5" />
                         {copied ? 'Copied!' : 'Copy'}
                       </button>
                       <button
                         onClick={handleRegenerateToken}
                         disabled={regenerateTokenMutation.isPending}
-                        className="flex items-center gap-1 text-xs text-yellow-700 hover:text-yellow-800 font-medium disabled:opacity-50"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors disabled:opacity-50"
                       >
-                        <RefreshCw className={`h-3 w-3 ${regenerateTokenMutation.isPending ? 'animate-spin' : ''}`} />
+                        <RefreshCw className={`h-3.5 w-3.5 ${regenerateTokenMutation.isPending ? 'animate-spin' : ''}`} />
                         Regenerate
                       </button>
                     </div>

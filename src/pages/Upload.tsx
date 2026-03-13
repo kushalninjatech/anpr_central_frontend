@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { toast } from 'react-toastify';
 import { Upload as UploadIcon, Image, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { anprApi } from '../services/api';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function Upload() {
   const [formData, setFormData] = useState({
@@ -18,6 +20,7 @@ export default function Upload() {
   const uploadMutation = useMutation({
     mutationFn: (data: FormData) => anprApi.upload(data),
     onSuccess: () => {
+      toast.success('Detection uploaded successfully');
       // Reset form on success
       setFormData({
         client_detection_id: '',
@@ -28,6 +31,9 @@ export default function Upload() {
       });
       setImageFile(null);
       setImagePreview(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Failed to upload detection');
     },
   });
 
@@ -40,7 +46,7 @@ export default function Upload() {
       };
       reader.readAsDataURL(file);
     } else {
-      alert('Please upload an image file');
+      toast.warning('Please upload an image file');
     }
   };
 
@@ -74,7 +80,7 @@ export default function Upload() {
     e.preventDefault();
 
     if (!imageFile) {
-      alert('Please select an image');
+      toast.warning('Please select an image');
       return;
     }
 
@@ -245,7 +251,7 @@ export default function Upload() {
             >
               {uploadMutation.isPending ? (
                 <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <LoadingSpinner size="sm" />
                   Uploading...
                 </>
               ) : (

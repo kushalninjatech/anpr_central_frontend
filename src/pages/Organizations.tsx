@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import {
   Building2,
@@ -8,32 +9,46 @@ import {
   Edit2,
   Trash2,
   Eye,
-  MapPin
+  MapPin,
 } from 'lucide-react';
 import { organizationApi } from '../services/api';
 import OrganizationModal from '../components/OrganizationModal';
 import OrganizationViewModal from '../components/OrganizationViewModal';
 import ConfirmModal from '../components/ConfirmModal';
 import type { Organization, OrganizationCreate, OrganizationUpdate } from '../types';
+import LoadingSpinner from '../components/LoadingSpinner';
+import Pagination from '../components/Pagination';
 
 export default function Organizations() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(0);
+  const pageSize = 9;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['organizations'],
-    queryFn: () => organizationApi.getAll(0, 1000),
+    queryKey: ['organizations', currentPage, pageSize, searchQuery],
+    queryFn: () => {
+      const page = currentPage + 1;
+      if (searchQuery.trim()) {
+        return organizationApi.search(searchQuery.trim(), page, pageSize);
+      }
+      return organizationApi.getAll(page, pageSize);
+    },
   });
 
   const createMutation = useMutation({
     mutationFn: (data: OrganizationCreate) => organizationApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      toast.success('Organization created successfully');
       setIsModalOpen(false);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Failed to create organization');
     },
   });
 
@@ -42,8 +57,12 @@ export default function Organizations() {
       organizationApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      toast.success('Organization updated successfully');
       setIsModalOpen(false);
       setSelectedOrg(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Failed to update organization');
     },
   });
 
@@ -51,17 +70,18 @@ export default function Organizations() {
     mutationFn: (id: number) => organizationApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      toast.success('Organization deleted successfully');
       setIsDeleteModalOpen(false);
       setSelectedOrg(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Failed to delete organization');
     },
   });
 
   const organizations = data?.data.organizations || [];
-  const filteredOrgs = organizations.filter(
-    (org) =>
-      org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      org.code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const totalOrgs = data?.data.total || 0;
+  const totalPages = Math.ceil(totalOrgs / pageSize);
 
   const handleSubmit = (formData: OrganizationCreate | OrganizationUpdate) => {
     if (selectedOrg) {
@@ -96,12 +116,17 @@ export default function Organizations() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Organizations</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Organizations
+            {totalOrgs > 0 && (
+              <span className="ml-2 text-lg font-medium text-gray-400">({totalOrgs})</span>
+            )}
+          </h1>
           <p className="text-gray-500 mt-1">Manage client organizations</p>
         </div>
         <button
           onClick={handleAddNew}
-          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/25"
+          className="btn btn-primary flex items-center gap-2"
         >
           <Plus className="h-5 w-5" />
           Add Organization
@@ -109,15 +134,15 @@ export default function Organizations() {
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-        <div className="relative">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           <input
             type="text"
             placeholder="Search organizations..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(0); }}
+            className="w-full pl-10 pr-4 py-2.5 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 shadow-sm"
           />
         </div>
       </div>
@@ -125,10 +150,10 @@ export default function Organizations() {
       {/* Organizations Grid */}
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+          <LoadingSpinner size="lg" text="Loading organizations..." />
         </div>
-      ) : filteredOrgs.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+      ) : organizations.length === 0 ? (
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl shadow-gray-200/50 border border-white/50 p-12 text-center">
           <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No organizations found</h3>
           <p className="text-gray-500 mb-4">
@@ -137,7 +162,7 @@ export default function Organizations() {
           {!searchQuery && (
             <button
               onClick={handleAddNew}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+              className="btn btn-primary inline-flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
               Add Organization
@@ -145,16 +170,17 @@ export default function Organizations() {
           )}
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredOrgs.map((org) => (
+          {organizations.map((org) => (
             <div
               key={org.id}
-              className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow"
+              className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl border border-white/50 p-6 transition-all duration-300 hover:-translate-y-1 min-h-[220px] flex flex-col"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="bg-indigo-50 p-2.5 rounded-xl">
-                    <Building2 className="h-6 w-6 text-indigo-600" />
+                  <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2.5 rounded-xl shadow-lg">
+                    <Building2 className="h-6 w-6 text-white" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">{org.name}</h3>
@@ -162,10 +188,10 @@ export default function Organizations() {
                   </div>
                 </div>
                 <span
-                  className={`px-2.5 py-1 text-xs font-medium rounded-full ${
+                  className={`badge ${
                     org.is_active
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-gray-100 text-gray-600'
+                      ? 'badge-success'
+                      : 'badge-danger'
                   }`}
                 >
                   {org.is_active ? 'Active' : 'Inactive'}
@@ -185,37 +211,47 @@ export default function Organizations() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+              <div className="pt-4 border-t border-gray-100 space-y-3 mt-auto">
                 <span className="text-xs text-gray-400">
                   Created {format(new Date(org.created_at), 'MMM dd, yyyy')}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleView(org)}
-                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    title="View Details"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-blue-600 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 rounded-xl transition-colors border border-blue-100"
                   >
                     <Eye className="h-4 w-4" />
+                    View
                   </button>
                   <button
                     onClick={() => handleEdit(org)}
-                    className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                    title="Edit"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-indigo-600 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 rounded-xl transition-colors border border-indigo-100"
                   >
                     <Edit2 className="h-4 w-4" />
+                    Edit
                   </button>
                   <button
                     onClick={() => handleDelete(org)}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-gradient-to-r from-red-50 to-rose-50 hover:from-red-100 hover:to-rose-100 rounded-xl transition-colors border border-red-100"
                   >
                     <Trash2 className="h-4 w-4" />
+                    Delete
                   </button>
                 </div>
               </div>
             </div>
           ))}
         </div>
+
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalOrgs}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          label="organizations"
+        />
+        </>
       )}
 
       {/* Organization Modal (Create/Edit) */}

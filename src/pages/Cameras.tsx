@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { cameraApi, organizationApi } from '../services/api';
 import type { Camera as CameraType } from '../types';
+import LoadingSpinner from '../components/LoadingSpinner';
+import StatCard from '../components/StatCard';
 
 export default function Cameras() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,7 +23,7 @@ export default function Cameras() {
   // Fetch organizations for dropdown
   const { data: orgsData } = useQuery({
     queryKey: ['organizations'],
-    queryFn: () => organizationApi.getAll(0, 1000),
+    queryFn: () => organizationApi.getAll(1, 1000),
   });
 
   // Fetch cameras with optional organization filter
@@ -37,13 +39,13 @@ export default function Cameras() {
   const filteredCameras = cameras.filter(
     (camera) =>
       camera.camera_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      camera.organization_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      camera.location_name.toLowerCase().includes(searchQuery.toLowerCase())
+      (camera.organization_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (camera.location_name || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Group cameras by organization
   const camerasByOrg = filteredCameras.reduce((acc, camera) => {
-    const orgName = camera.organization_name;
+    const orgName = camera.organization_name || 'Unknown';
     if (!acc[orgName]) {
       acc[orgName] = [];
     }
@@ -68,82 +70,69 @@ export default function Cameras() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-4">
-            <div className="bg-blue-50 p-3 rounded-xl">
-              <Camera className="h-6 w-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{totalCameras}</p>
-              <p className="text-sm text-gray-500">Total Cameras</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-4">
-            <div className="bg-emerald-50 p-3 rounded-xl">
-              <Video className="h-6 w-6 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{activeCameras}</p>
-              <p className="text-sm text-gray-500">Active Cameras</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-4">
-            <div className="bg-purple-50 p-3 rounded-xl">
-              <Activity className="h-6 w-6 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{totalDetections.toLocaleString()}</p>
-              <p className="text-sm text-gray-500">Total Detections</p>
-            </div>
-          </div>
-        </div>
+        <StatCard
+          title="Total Cameras"
+          value={totalCameras}
+          icon={Camera}
+          color="blue"
+          change="All registered cameras"
+          changeType="neutral"
+        />
+        <StatCard
+          title="Active Cameras"
+          value={activeCameras}
+          icon={Video}
+          color="green"
+          change={`${totalCameras > 0 ? Math.round((activeCameras / totalCameras) * 100) : 0}% online`}
+          changeType="increase"
+        />
+        <StatCard
+          title="Total Detections"
+          value={totalDetections.toLocaleString()}
+          icon={Activity}
+          color="purple"
+          change="Across all cameras"
+          changeType="neutral"
+        />
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Search */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search cameras..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search cameras..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 shadow-sm"
+          />
+        </div>
 
-          {/* Organization Filter */}
-          <div className="relative min-w-[250px]">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <select
-              value={selectedOrgId || ''}
-              onChange={(e) => setSelectedOrgId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 appearance-none bg-white"
-            >
-              <option value="">All Organizations</option>
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm">
+          <Filter className="h-4 w-4 text-gray-400" />
+          <select
+            value={selectedOrgId || ''}
+            onChange={(e) => setSelectedOrgId(e.target.value ? Number(e.target.value) : null)}
+            className="border-none bg-transparent text-sm font-medium text-gray-700 focus:outline-none focus:ring-0 min-w-[180px]"
+          >
+            <option value="">All Organizations</option>
+            {organizations.map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       {/* Cameras List */}
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+          <LoadingSpinner size="lg" text="Loading cameras..." />
         </div>
       ) : filteredCameras.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl shadow-gray-200/50 border border-white/50 p-12 text-center">
           <Camera className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No cameras found</h3>
           <p className="text-gray-500">
@@ -170,13 +159,13 @@ export default function Cameras() {
                 {orgCameras.map((camera) => (
                   <div
                     key={camera.id}
-                    className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow"
+                    className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl border border-white/50 p-6 transition-all duration-300 hover:-translate-y-1"
                   >
                     {/* Camera Header */}
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <div className="bg-blue-50 p-2.5 rounded-xl">
-                          <Camera className="h-6 w-6 text-blue-600" />
+                        <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2.5 rounded-xl shadow-lg">
+                          <Camera className="h-6 w-6 text-white" />
                         </div>
                         <div>
                           <h3 className="font-semibold text-gray-900">{camera.camera_name}</h3>
@@ -184,9 +173,9 @@ export default function Cameras() {
                         </div>
                       </div>
                       <span
-                        className={`px-2.5 py-1 text-xs font-medium rounded-full ${
+                        className={`badge ${
                           camera.is_active
-                            ? 'bg-emerald-100 text-emerald-700'
+                            ? 'badge-success'
                             : 'bg-gray-100 text-gray-600'
                         }`}
                       >
@@ -213,7 +202,7 @@ export default function Cameras() {
 
                     {/* Stats */}
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="bg-gray-50 rounded-xl p-3">
+                      <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl p-3 border border-purple-100">
                         <div className="flex items-center gap-2">
                           <Activity className="h-4 w-4 text-purple-500" />
                           <span className="text-sm font-medium text-gray-900">
@@ -222,7 +211,7 @@ export default function Cameras() {
                         </div>
                         <p className="text-xs text-gray-500 mt-1">Detections</p>
                       </div>
-                      <div className="bg-gray-50 rounded-xl p-3">
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
                         <div className="flex items-center gap-2">
                           <Clock className="h-4 w-4 text-blue-500" />
                           <span className="text-sm font-medium text-gray-900">
@@ -236,11 +225,13 @@ export default function Cameras() {
                     </div>
 
                     {/* Footer */}
-                    <div className="pt-4 border-t border-gray-100">
-                      <span className="text-xs text-gray-400">
-                        Created {format(new Date(camera.created_at), 'MMM dd, yyyy')}
-                      </span>
-                    </div>
+                    {camera.created_at && (
+                      <div className="pt-4 border-t border-gray-100">
+                        <span className="text-xs text-gray-400">
+                          Created {format(new Date(camera.created_at), 'MMM dd, yyyy')}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

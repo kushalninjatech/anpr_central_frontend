@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { format, parseISO } from 'date-fns';
 import { adminApi, healthApi, analyticsApi, organizationApi } from '../services/api';
 import {
   Building2,
@@ -12,6 +13,7 @@ import {
   TrendingDown,
   Calendar,
   Users,
+  CheckCircle,
 } from 'lucide-react';
 import PieChart from '../components/charts/PieChart';
 import AnimatedCounter from '../components/AnimatedCounter';
@@ -19,12 +21,17 @@ import StatCard from '../components/StatCard';
 import Card from '../components/Card';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Badge from '../components/Badge';
+import Pagination from '../components/Pagination';
 
 export default function Dashboard() {
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'custom'>('today');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedOrgId, setSelectedOrgId] = useState<number | ''>('');
+  const [dailyPage, setDailyPage] = useState(0);
+  const dailyPageSize = 10;
+  const startDateRef = useRef<HTMLInputElement>(null);
+  const endDateRef = useRef<HTMLInputElement>(null);
 
   // Get current date range for API calls
   const getDateRangeParams = () => {
@@ -62,7 +69,7 @@ export default function Dashboard() {
   // Get organizations list for filter
   const { data: orgsData } = useQuery({
     queryKey: ['organizations'],
-    queryFn: () => organizationApi.getAll(0, 1000),
+    queryFn: () => organizationApi.getAll(1, 1000),
   });
 
   const organizations = orgsData?.data.organizations || [];
@@ -74,14 +81,14 @@ export default function Dashboard() {
   });
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ['system-stats', dateRange],
+    queryKey: ['system-stats', dateRange, selectedOrgId],
     queryFn: () => {
       // Map dateRange to backend date_filter
       let filter = 'today';
       if (dateRange === 'week') filter = 'this_week';
       else if (dateRange === 'month') filter = 'this_month';
       else if (dateRange === 'custom') filter = 'all_time'; // For custom, we show all time for now
-      return adminApi.getSystemStats(filter).then((res) => res.data);
+      return adminApi.getSystemStats(filter, selectedOrgId || undefined).then((res) => res.data);
     },
     refetchInterval: 3000,
   });
@@ -93,8 +100,61 @@ export default function Dashboard() {
       const params = getDateRangeParams();
       return analyticsApi.hourly(params.start, params.end, selectedOrgId || undefined).then((res) => res.data);
     },
+    enabled: dateRange === 'today',
     refetchInterval: 3000,
   });
+
+  const { data: rawDailyData } = useQuery({
+    queryKey: ['analytics-daily', dateRange, selectedOrgId, startDate, endDate],
+    queryFn: () => {
+      if (dateRange === 'custom' && startDate && endDate) {
+        return analyticsApi.daily(
+          365, selectedOrgId || undefined,
+          new Date(startDate).toISOString(),
+          new Date(endDate + 'T23:59:59').toISOString()
+        ).then((res) => res.data);
+      }
+      const days = dateRange === 'week' ? 7 : 30;
+      return analyticsApi.daily(days, selectedOrgId || undefined).then((res) => res.data);
+    },
+    enabled: dateRange !== 'today' && (dateRange !== 'custom' || (!!startDate && !!endDate)),
+    refetchInterval: 3000,
+  });
+
+  // Fill gaps in daily data so every date is shown (with 0s for missing days)
+  const dailyData = useMemo(() => {
+    if (dateRange === 'today') return [];
+
+    const dataMap = new Map<string, any>();
+    if (rawDailyData) {
+      rawDailyData.forEach((d: any) => dataMap.set(d.date, d));
+    }
+
+    let rangeStart: Date;
+    let rangeEnd: Date;
+
+    if (dateRange === 'custom' && startDate && endDate) {
+      rangeStart = new Date(startDate);
+      rangeEnd = new Date(endDate);
+    } else {
+      const days = dateRange === 'week' ? 7 : 30;
+      rangeEnd = new Date();
+      rangeStart = new Date();
+      rangeStart.setDate(rangeStart.getDate() - (days - 1));
+    }
+
+    const result = [];
+    const current = new Date(rangeEnd);
+    while (current >= rangeStart) {
+      const dateStr = format(current, 'yyyy-MM-dd');
+      const existing = dataMap.get(dateStr);
+      result.push(
+        existing || { date: dateStr, total: 0, success: 0, failed: 0, in_count: 0, out_count: 0, success_rate: 0 }
+      );
+      current.setDate(current.getDate() - 1);
+    }
+    return result;
+  }, [rawDailyData, dateRange, startDate, endDate]);
 
   const { data: vehicleTypesData } = useQuery({
     queryKey: ['analytics-vehicle-types', dateRange, selectedOrgId],
@@ -121,6 +181,11 @@ export default function Dashboard() {
     return `${minutes}m`;
   };
 
+  const formatDate = (date: any) => {
+    if (!date) return "";
+    const [year, month, day] = date.split("-");
+    return `${day}-${month}-${year}`;
+  };
   // Get last 5 hours data (current hour + previous 4 hours) in descending order
   const last5HoursData = useMemo(() => {
     if (!hourlyData || hourlyData.length === 0) return [];
@@ -156,10 +221,22 @@ export default function Dashboard() {
 
   const vehicleColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
-  if (isLoading) {
+  // Track whether the dashboard has loaded data at least once
+  const [initialLoaded, setInitialLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!initialLoaded && stats) {
+      // First time stats arrived — mark as loaded after brief spinner
+      const timer = setTimeout(() => setInitialLoaded(true), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [stats, initialLoaded]);
+
+  // Only show spinner on the very first page load, not on filter changes
+  if (!initialLoaded) {
     return (
       <div className="flex items-center justify-center h-96">
-        <LoadingSpinner size="lg" text="Loading dashboard..." />
+        <LoadingSpinner size="lg" text={isLoading ? "Loading dashboard..." : "Waiting for data..."} />
       </div>
     );
   }
@@ -198,7 +275,7 @@ export default function Dashboard() {
           <Calendar className="h-4 w-4 text-gray-400" />
           <select
             value={dateRange}
-            onChange={(e) => setDateRange(e.target.value as any)}
+            onChange={(e) => { setDateRange(e.target.value as any); setDailyPage(0); }}
             className="border-none bg-transparent text-sm font-medium text-gray-700 focus:outline-none focus:ring-0"
           >
             <option value="today">Today</option>
@@ -209,39 +286,73 @@ export default function Dashboard() {
         </div>
 
         {dateRange === 'custom' && (
-          <div className="flex gap-2">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="input !w-auto !py-2"
-            />
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="input !w-auto !py-2"
-            />
+          <div className="flex gap-3">
+            <div
+              className="relative flex items-center gap-2 bg-white/80 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm cursor-pointer"
+              onClick={() => startDateRef.current?.showPicker()}
+            >
+              <input
+                ref={startDateRef}
+                type="date"
+                value={startDate}
+                max={format(new Date(), 'yyyy-MM-dd')}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+              />
+              <Calendar className="h-4 w-4 text-gray-400" />
+              <span className={`text-sm font-medium ${startDate ? 'text-gray-700' : 'text-gray-400'}`}>
+                {startDate ? format(new Date(startDate), 'dd-MM-yyyy') : 'dd-mm-yyyy'}
+              </span>
+            </div>
+            <div
+              className="relative flex items-center gap-2 bg-white/80 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm cursor-pointer"
+              onClick={() => endDateRef.current?.showPicker()}
+            >
+              <input
+                ref={endDateRef}
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                max={format(new Date(), 'yyyy-MM-dd')}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+              />
+              <Calendar className="h-4 w-4 text-gray-400" />
+              <span className={`text-sm font-medium ${endDate ? 'text-gray-700' : 'text-gray-400'}`}>
+                {endDate ? format(new Date(endDate), 'dd-MM-yyyy') : 'dd-mm-yyyy'}
+              </span>
+            </div>
           </div>
         )}
       </div>
 
       {/* Stats Grid - First Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <StatCard
-          title="Total Organizations"
-          value={stats?.total_organizations || 0}
-          icon={Building2}
-          color="blue"
-          change={`${stats?.active_organizations || 0} active`}
-          changeType="neutral"
-        />
+        {selectedOrgId === '' ? (
+          <StatCard
+            title="Total Organizations"
+            value={stats?.total_organizations || 0}
+            icon={Building2}
+            color="blue"
+            change={`${stats?.active_organizations || 0} active`}
+            changeType="neutral"
+          />
+        ) : (
+          <StatCard
+            title="Success Rate"
+            value={`${stats?.total_detections ? Math.round((stats.success_detections / stats.total_detections) * 100) : 0}%`}
+            icon={CheckCircle}
+            color="green"
+            change={`${stats?.success_detections || 0} of ${stats?.total_detections || 0} detections`}
+            changeType={stats?.total_detections && (stats.success_detections / stats.total_detections) >= 0.9 ? 'increase' : 'decrease'}
+          />
+        )}
         <StatCard
           title="Total Cameras"
           value={stats?.total_cameras || 0}
           icon={Camera}
           color="yellow"
-          change="Across all organizations"
+          change={selectedOrgId === '' ? 'Across all organizations' : 'In selected organization'}
           changeType="neutral"
         />
       </div>
@@ -282,74 +393,188 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Hourly Analytics Table */}
-      {last5HoursData && last5HoursData.length > 0 && (
-        <Card title="Hourly Activity" subtitle="Last 5 hours detection trend">
-          <div className="overflow-x-auto">
-            <table className="table-modern">
-              <thead>
-                <tr>
-                  <th>Hour</th>
-                  <th className="text-center">Total</th>
-                  <th className="text-center">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                      In
-                    </span>
-                  </th>
-                  <th className="text-center">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                      Out
-                    </span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {last5HoursData.map((hourData: any) => (
-                  <tr
-                    key={hourData.hour}
-                    className={hourData.isCurrent ? '!bg-primary-50/50 border-l-4 border-primary-500' : ''}
-                  >
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-gray-400" />
-                        <span className={`font-medium ${hourData.isCurrent ? 'text-primary-700' : 'text-gray-900'}`}>
-                          {hourData.timeLabel}
-                        </span>
-                        {hourData.isCurrent && (
-                          <Badge variant="info" size="sm">Current</Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td className="text-center">
-                      <span className="text-lg font-bold text-gray-900">
-                        {hourData.total.toLocaleString()}
-                      </span>
-                    </td>
-                    <td className="text-center">
-                      <span className="text-lg font-bold text-green-600">
-                        {hourData.in_count.toLocaleString()}
-                      </span>
-                    </td>
-                    <td className="text-center">
-                      <span className="text-lg font-bold text-blue-600">
-                        {hourData.out_count.toLocaleString()}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Activity Table — dynamic based on date range */}
+      <Card
+        title={dateRange === 'today' ? 'Hourly Activity' : 'Daily Activity'}
+        subtitle={
+          dateRange === 'today'
+            ? 'Last 5 hours detection trend'
+            : dateRange === 'week'
+              ? 'Last 7 days detection trend'
+              : dateRange === 'month'
+                ? 'Last 30 days detection trend'
+                : 'Detection trend for selected period'
+        }
+      >
+        {dateRange === 'custom' && (!startDate || !endDate) ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <Calendar className="h-12 w-12 text-gray-300 mb-3" />
+            <p className="text-gray-500 font-medium">Select a date range</p>
+            <p className="text-sm text-gray-400 mt-1">Please select both start and end dates to view activity data</p>
           </div>
-        </Card>
-      )}
+        ) : dateRange === 'today' ? (
+          // Hourly table for Today
+          last5HoursData && last5HoursData.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="table-modern">
+                <thead>
+                  <tr>
+                    <th>Hour</th>
+                    <th className="text-center">Total</th>
+                    <th className="text-center">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        In
+                      </span>
+                    </th>
+                    <th className="text-center">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        Out
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {last5HoursData.map((hourData: any) => (
+                    <tr
+                      key={hourData.hour}
+                      className={hourData.isCurrent ? '!bg-primary-50/50 border-l-4 border-primary-500' : ''}
+                    >
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-gray-400" />
+                          <span className={`font-medium ${hourData.isCurrent ? 'text-primary-700' : 'text-gray-900'}`}>
+                            {hourData.timeLabel}
+                          </span>
+                          {hourData.isCurrent && (
+                            <Badge variant="info" size="sm">Current</Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-center">
+                        <span className="text-lg font-bold text-gray-900">
+                          {hourData.total.toLocaleString()}
+                        </span>
+                      </td>
+                      <td className="text-center">
+                        <span className="text-lg font-bold text-green-600">
+                          {hourData.in_count.toLocaleString()}
+                        </span>
+                      </td>
+                      <td className="text-center">
+                        <span className="text-lg font-bold text-blue-600">
+                          {hourData.out_count.toLocaleString()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Clock className="h-12 w-12 text-gray-300 mb-3" />
+              <p className="text-gray-500 font-medium">No hourly data</p>
+              <p className="text-sm text-gray-400 mt-1">No detections found for today</p>
+            </div>
+          )
+        ) : (
+          // Daily table for 7 Days / 30 Days / Custom
+          dailyData && dailyData.length > 0 ? (
+            <>
+              <div className="overflow-x-auto">
+                <table className="table-modern">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th className="text-center">Total</th>
+                      <th className="text-center">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                          In
+                        </span>
+                      </th>
+                      <th className="text-center">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                          Out
+                        </span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyData
+                      .slice(dailyPage * dailyPageSize, (dailyPage + 1) * dailyPageSize)
+                      .map((day: any, index: number) => {
+                        const todayStr = format(new Date(), 'yyyy-MM-dd');
+                        const isToday = day.date === todayStr;
+                        const dateLabel = day.date
+                          ? format(parseISO(day.date), 'dd-MM-yyyy')
+                          : `Day ${dailyPage * dailyPageSize + index + 1}`;
+                        return (
+                          <tr
+                            key={day.date || index}
+                            className={isToday ? '!bg-primary-50/50 border-l-4 border-primary-500' : ''}
+                          >
+                            <td>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-gray-400" />
+                                <span className={`font-medium ${isToday ? 'text-primary-700' : 'text-gray-900'}`}>
+                                  {dateLabel}
+                                </span>
+                                {isToday && (
+                                  <Badge variant="info" size="sm">Today</Badge>
+                                )}
+                              </div>
+                            </td>
+                            <td className="text-center">
+                              <span className="text-lg font-bold text-gray-900">
+                                {(day.total || 0).toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="text-center">
+                              <span className="text-lg font-bold text-green-600">
+                                {(day.in_count || 0).toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="text-center">
+                              <span className="text-lg font-bold text-blue-600">
+                                {(day.out_count || 0).toLocaleString()}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-100">
+                <Pagination
+                  currentPage={dailyPage}
+                  totalPages={Math.ceil(dailyData.length / dailyPageSize)}
+                  totalItems={dailyData.length}
+                  pageSize={dailyPageSize}
+                  onPageChange={setDailyPage}
+                  label="days"
+                />
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Calendar className="h-12 w-12 text-gray-300 mb-3" />
+              <p className="text-gray-500 font-medium">No daily data</p>
+              <p className="text-sm text-gray-400 mt-1">No detections found for the selected period</p>
+            </div>
+          )
+        )}
+      </Card>
 
       {/* Two-column layout for Vehicle Types and Camera Performance */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Vehicle Type Distribution */}
-        {vehicleTypesData && vehicleTypesData.length > 0 && (
-          <Card title="Vehicle Type Distribution" subtitle="Detection breakdown by vehicle type">
+        <Card title="Vehicle Type Distribution" subtitle="Detection breakdown by vehicle type">
+          {vehicleTypesData && vehicleTypesData.length > 0 ? (
             <PieChart
               data={vehicleTypesData}
               nameKey="vehicle_type"
@@ -357,12 +582,18 @@ export default function Dashboard() {
               colors={vehicleColors}
               height={350}
             />
-          </Card>
-        )}
+          ) : (
+            <div className="flex flex-col items-center justify-center h-[350px] text-center">
+              <ScanLine className="h-12 w-12 text-gray-300 mb-3" />
+              <p className="text-gray-500 font-medium">No vehicle type data</p>
+              <p className="text-sm text-gray-400 mt-1">No detections found for the selected period</p>
+            </div>
+          )}
+        </Card>
 
         {/* Top Cameras Performance */}
-        {cameraPerformanceData && cameraPerformanceData.length > 0 && (
-          <Card title="Top 10 Cameras" subtitle="Ranked by detection activity">
+        <Card title="Top 10 Cameras" subtitle="Ranked by detection activity">
+          {cameraPerformanceData && cameraPerformanceData.length > 0 ? (
             <div className="space-y-3 max-h-[350px] overflow-y-auto">
               {cameraPerformanceData.map((camera: any, index: number) => (
                 <div
@@ -385,8 +616,14 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-          </Card>
-        )}
+          ) : (
+            <div className="flex flex-col items-center justify-center h-[350px] text-center">
+              <Camera className="h-12 w-12 text-gray-300 mb-3" />
+              <p className="text-gray-500 font-medium">No camera data</p>
+              <p className="text-sm text-gray-400 mt-1">No camera activity found for the selected period</p>
+            </div>
+          )}
+        </Card>
       </div>
 
       {/* System Health */}

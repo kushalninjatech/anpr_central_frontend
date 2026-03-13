@@ -143,19 +143,18 @@ export interface DetectionStats {
 
 // Camera Types
 export interface Camera {
-  id: number;
-  camera_id: number;
+  id?: number;
+  camera_id: string;
   camera_name: string;
-  location_id: number;
-  location_name: string;
   organization_id: number;
-  organization_name: string;
-  stream_url: string | null;
-  is_active: boolean;
+  organization_name: string | null;
+  location_name?: string | null;
+  is_active?: boolean;
+  stream_url?: string | null;
   detection_count: number;
   last_detection: string | null;
-  created_at: string;
-  updated_at: string;
+  first_detection: string | null;
+  created_at?: string;
 }
 
 export interface CameraListResponse {
