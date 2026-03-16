@@ -34,19 +34,47 @@ export default function Pagination({
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        {Array.from({ length: totalPages }, (_, i) => (
-          <button
-            key={i}
-            onClick={() => onPageChange(i)}
-            className={`min-w-[36px] h-9 text-sm font-medium rounded-lg transition-colors ${
-              currentPage === i
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            {i + 1}
-          </button>
-        ))}
+        {(() => {
+          const pages: (number | string)[] = [];
+          const maxVisible = 7;
+
+          if (totalPages <= maxVisible) {
+            for (let i = 0; i < totalPages; i++) pages.push(i);
+          } else {
+            // Always show first page
+            pages.push(0);
+
+            const start = Math.max(1, currentPage - 1);
+            const end = Math.min(totalPages - 2, currentPage + 1);
+
+            if (start > 1) pages.push('start-ellipsis');
+            for (let i = start; i <= end; i++) pages.push(i);
+            if (end < totalPages - 2) pages.push('end-ellipsis');
+
+            // Always show last page
+            pages.push(totalPages - 1);
+          }
+
+          return pages.map((page, idx) =>
+            typeof page === 'string' ? (
+              <span key={page} className="min-w-[36px] h-9 flex items-center justify-center text-sm text-gray-400">
+                ...
+              </span>
+            ) : (
+              <button
+                key={idx}
+                onClick={() => onPageChange(page)}
+                className={`min-w-[36px] h-9 text-sm font-medium rounded-lg transition-colors ${
+                  currentPage === page
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {page + 1}
+              </button>
+            )
+          );
+        })()}
         <button
           onClick={() => onPageChange(Math.min(totalPages - 1, currentPage + 1))}
           disabled={currentPage >= totalPages - 1}
