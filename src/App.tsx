@@ -9,6 +9,7 @@ import Organizations from './pages/Organizations';
 import Detections from './pages/Detections';
 import Reports from './pages/Reports';
 import Upload from './pages/Upload';
+import StaticNumberplate from './pages/StaticNumberplate';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,20 +24,26 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthWrapper>
-        <Router>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route path="organizations" element={<Organizations />} />
-              <Route path="detections" element={<Detections />} />
-              <Route path="reports" element={<Reports />} />
-              <Route path="upload" element={<Upload />} />
-            </Route>
-          </Routes>
-        </Router>
-      </AuthWrapper>
+      <Router>
+        <Routes>
+          {/* Public route — no auth required */}
+          <Route path="/static-numberplate" element={<StaticNumberplate />} />
+
+          {/* Auth-protected routes */}
+          <Route path="/" element={
+            <AuthWrapper>
+              <Layout />
+            </AuthWrapper>
+          }>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="organizations" element={<Organizations />} />
+            <Route path="detections" element={<Detections />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="upload" element={<Upload />} />
+          </Route>
+        </Routes>
+      </Router>
       <ToastContainer
         position="top-right"
         autoClose={3000}

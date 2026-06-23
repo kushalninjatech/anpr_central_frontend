@@ -230,3 +230,32 @@ export const analyticsApi = {
 };
 
 export default api;
+
+// Public API — no authentication required
+const publicApi = axios.create({
+  baseURL: API_BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+export const staticApi = {
+  listDetections: (params: {
+    page?: number;
+    page_size?: number;
+    organization_id?: number;
+    camera_id?: string;
+    activity_type?: string;
+    plate?: string;
+    status_filter?: string;
+    start_date?: string;
+    end_date?: string;
+  }) => publicApi.get<{ total: number; detections: any[] }>('/api/v1/static/detections', { params }),
+
+  getDetection: (detection_id: number) =>
+    publicApi.get<any>(`/api/v1/static/detection/${detection_id}`),
+
+  updateNumberplate: (id: number, numberplate_text: string) =>
+    publicApi.put<{ success: boolean; message: string; detection: any }>(
+      '/api/v1/static/detection/update',
+      { id, numberplate_text }
+    ),
+};
