@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import {
@@ -20,6 +20,9 @@ import {
   Save,
   Image as ImageIcon,
   ChevronDown,
+  Trash2,
+  ZoomIn,
+  Maximize2,
 } from 'lucide-react';
 import { staticApi, API_BASE_URL } from '../services/api';
 import Pagination from '../components/Pagination';
@@ -91,6 +94,16 @@ export default function StaticNumberplate() {
   const [plateInput, setPlateInput] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saveMessage, setSaveMessage] = useState('');
+
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+  // Image zoom/pan state
+  const [imgScale, setImgScale] = useState(1);
+  const [imgOffset, setImgOffset] = useState({ x: 0, y: 0 });
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const imgContainerRef = useRef<HTMLDivElement>(null);
 
   const startDateRef = useRef<HTMLInputElement>(null);
   const endDateRef = useRef<HTMLInputElement>(null);
@@ -180,6 +193,61 @@ export default function StaticNumberplate() {
       setSaveMessage(err?.response?.data?.detail || 'Failed to update numberplate');
     }
   };
+
+  const handleDelete = async (id: number) => {
+    setDeletingId(id);
+    try {
+      await staticApi.deleteDetection(id);
+      queryClient.setQueryData(
+        ['static-detections', page, pageSize, orgId, cameraId, activityType, statusFilter, plateSearch, startDate, endDate],
+        (old: any) => {
+          if (!old) return old;
+          return {
+            ...old,
+            data: {
+              ...old.data,
+              detections: old.data.detections.map((d: any) =>
+                d.detection_id === id
+                  ? { ...d, is_deleted: true, deleted_status: 'Deleted' }
+                  : d
+              ),
+            },
+          };
+        }
+      );
+    } catch {
+      // silently ignore — row status unchanged if delete fails
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
+    }
+  };
+
+  const resetZoom = useCallback(() => {
+    setImgScale(1);
+    setImgOffset({ x: 0, y: 0 });
+  }, []);
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    setImgScale(prev => Math.min(8, Math.max(1, prev - e.deltaY * 0.002)));
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (imgScale <= 1) return;
+    isDragging.current = true;
+    dragStart.current = { x: e.clientX - imgOffset.x, y: e.clientY - imgOffset.y };
+  }, [imgScale, imgOffset]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+    setImgOffset({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
+  }, []);
+
+  const handleMouseUp = useCallback(() => { isDragging.current = false; }, []);
+
+  // Reset zoom whenever a new detection is opened
+  useEffect(() => { resetZoom(); }, [selectedDetectionId, resetZoom]);
 
   const formatDateTime = (dateString: string | null | undefined) => {
     if (!dateString) return null;
@@ -385,6 +453,7 @@ export default function StaticNumberplate() {
                       <th className="px-4 py-3.5 text-left text-xs font-bold text-indigo-600 uppercase tracking-wider">Numberplate</th>
                       <th className="px-4 py-3.5 text-left text-xs font-bold text-indigo-600 uppercase tracking-wider">Activity</th>
                       <th className="px-4 py-3.5 text-left text-xs font-bold text-indigo-600 uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-3.5 text-center text-xs font-bold text-indigo-600 uppercase tracking-wider">Deleted</th>
                       <th className="px-4 py-3.5 text-left text-xs font-bold text-indigo-600 uppercase tracking-wider">Detected At</th>
                       <th className="px-4 py-3.5 text-center text-xs font-bold text-indigo-600 uppercase tracking-wider">Action</th>
                     </tr>
@@ -429,6 +498,19 @@ export default function StaticNumberplate() {
                           <td className="px-4 py-3">
                             <StatusBadge status={d.status} />
                           </td>
+                          <td className="px-4 py-3 text-center">
+                            {d.is_deleted ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                {d.deleted_status || 'Deleted'}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                Active
+                              </span>
+                            )}
+                          </td>
                           <td className="px-4 py-3">
                             {dt ? (
                               <div>
@@ -440,13 +522,41 @@ export default function StaticNumberplate() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={() => openDetail(d.detection_id)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-xs font-medium transition-colors"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                              View
-                            </button>
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => openDetail(d.detection_id)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-xs font-medium transition-colors"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View
+                              </button>
+
+                              {confirmDeleteId === d.detection_id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleDelete(d.detection_id)}
+                                    disabled={deletingId === d.detection_id}
+                                    className="px-2.5 py-1.5 bg-red-600 text-white hover:bg-red-700 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                                  >
+                                    {deletingId === d.detection_id ? '...' : 'Confirm'}
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmDeleteId(null)}
+                                    className="px-2.5 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg text-xs font-medium transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setConfirmDeleteId(d.detection_id)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-medium transition-colors"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Delete
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -512,20 +622,64 @@ export default function StaticNumberplate() {
                 </div>
               ) : detailData ? (
                 <div className="p-5 space-y-4">
-                  {/* Image */}
+                  {/* Image — scroll to zoom, drag to pan */}
                   {detailData.image_url ? (
-                    <div className="rounded-xl overflow-hidden bg-gray-900 flex items-center justify-center">
-                      <img
-                        src={`${API_BASE_URL}${detailData.image_url}`}
-                        alt="Vehicle Detection"
-                        className="w-full object-contain max-h-[60vh]"
-                        onError={(e) => {
-                          const el = e.target as HTMLImageElement;
-                          el.style.display = 'none';
-                          el.parentElement!.innerHTML =
-                            '<div class="flex flex-col items-center justify-center py-16"><svg class="w-12 h-12 mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg><p class="text-sm text-gray-500">Image not available</p></div>';
-                        }}
-                      />
+                    <div className="relative rounded-xl overflow-hidden bg-gray-900 select-none" style={{ height: '60vh' }}>
+                      {/* Zoom controls */}
+                      <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+                        <span className="px-2 py-1 bg-black/50 text-white text-xs font-mono rounded-lg backdrop-blur-sm">
+                          {Math.round(imgScale * 100)}%
+                        </span>
+                        {imgScale > 1 && (
+                          <button
+                            onClick={resetZoom}
+                            className="p-1.5 bg-black/50 text-white hover:bg-black/70 rounded-lg backdrop-blur-sm transition-colors"
+                            title="Reset zoom"
+                          >
+                            <Maximize2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Hint */}
+                      {imgScale === 1 && (
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 bg-black/40 text-white/80 text-xs rounded-full backdrop-blur-sm pointer-events-none">
+                          <ZoomIn className="h-3 w-3" />
+                          Scroll to zoom · Drag to pan
+                        </div>
+                      )}
+
+                      {/* Zoomable container */}
+                      <div
+                        ref={imgContainerRef}
+                        className="w-full h-full flex items-center justify-center overflow-hidden"
+                        style={{ cursor: imgScale > 1 ? (isDragging.current ? 'grabbing' : 'grab') : 'default' }}
+                        onWheel={handleWheel}
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseUp}
+                      >
+                        <img
+                          src={`${API_BASE_URL}${detailData.image_url}`}
+                          alt="Vehicle Detection"
+                          draggable={false}
+                          style={{
+                            transform: `scale(${imgScale}) translate(${imgOffset.x / imgScale}px, ${imgOffset.y / imgScale}px)`,
+                            transformOrigin: 'center center',
+                            transition: isDragging.current ? 'none' : 'transform 0.1s ease-out',
+                            maxWidth: '100%',
+                            maxHeight: '100%',
+                            objectFit: 'contain',
+                          }}
+                          onError={(e) => {
+                            const el = e.target as HTMLImageElement;
+                            el.style.display = 'none';
+                            el.parentElement!.innerHTML =
+                              '<div class="flex flex-col items-center justify-center h-full"><svg class="w-12 h-12 mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg><p class="text-sm text-gray-500">Image not available</p></div>';
+                          }}
+                        />
+                      </div>
                     </div>
                   ) : (
                     <div className="rounded-xl border border-gray-200 bg-gray-50 flex flex-col items-center justify-center py-16">
