@@ -502,12 +502,12 @@ export default function StaticNumberplate() {
                             {d.is_deleted ? (
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
                                 <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                                {d.deleted_status || 'Deleted'}
+                                Yes
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
                                 <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                Active
+                                No
                               </span>
                             )}
                           </td>
