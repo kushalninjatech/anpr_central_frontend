@@ -258,4 +258,7 @@ export const staticApi = {
       '/api/v1/static/detection/update',
       { id, numberplate_text }
     ),
+
+  deleteDetection: (id: number) =>
+    publicApi.delete(`/api/v1/static/detection/${id}`),
 };
