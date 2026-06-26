@@ -14,6 +14,9 @@ import type {
   OrganizationStats,
   ProcessingStatus,
   HealthResponse,
+  SyncJob,
+  SyncJobCreate,
+  SyncJobListResponse,
 } from '../types';
 
 // Dynamically determine API base URL based on hostname
@@ -261,4 +264,21 @@ export const staticApi = {
 
   deleteDetection: (id: number) =>
     publicApi.delete(`/api/v1/static/detection/${id}`),
+};
+
+// Sync Jobs API — public, no authentication required
+export const syncJobApi = {
+  create: (data: SyncJobCreate) =>
+    publicApi.post<SyncJob>(`${API_V1_PREFIX}/sync-jobs/`, data),
+
+  getCurrent: () =>
+    publicApi.get<SyncJob>(`${API_V1_PREFIX}/sync-jobs/current`),
+
+  getList: (page = 1, pageSize = 50) =>
+    publicApi.get<SyncJobListResponse>(`${API_V1_PREFIX}/sync-jobs/`, {
+      params: { page, page_size: pageSize },
+    }),
+
+  cancel: () =>
+    publicApi.post<SyncJob>(`${API_V1_PREFIX}/sync-jobs/cancel`),
 };
