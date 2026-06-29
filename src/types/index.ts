@@ -203,3 +203,42 @@ export interface HealthResponse {
 export interface ApiError {
   detail: string;
 }
+
+// Sync Job Types
+export type SyncJobStatus =
+  | 'pending'
+  | 'running'
+  | 'cancelling'
+  | 'completed'
+  | 'completed_with_errors'
+  | 'cancelled'
+  | 'failed';
+
+export interface SyncJob {
+  id: number;
+  ip: string | null;
+  from_datetime: string;
+  to_datetime: string;
+  status: SyncJobStatus;
+  total_records: number;
+  success_count: number;
+  fail_count: number;
+  skipped_count: number;
+  progress_percent: number;
+  celery_task_id: string | null;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SyncJobCreate {
+  from_datetime: string;
+  to_datetime: string;
+}
+
+export interface SyncJobListResponse {
+  jobs: SyncJob[];
+  total: number;
+}

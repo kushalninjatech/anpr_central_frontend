@@ -9,6 +9,7 @@ import Organizations from './pages/Organizations';
 import Detections from './pages/Detections';
 import Reports from './pages/Reports';
 import Upload from './pages/Upload';
+import SyncRecords from './pages/SyncRecords';
 import StaticNumberplate from './pages/StaticNumberplate';
 
 const queryClient = new QueryClient({
@@ -26,8 +27,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Router>
         <Routes>
-          {/* Public route — no auth required */}
+          {/* Public routes — no auth required */}
           <Route path="/static-numberplate" element={<StaticNumberplate />} />
+          <Route path="/sync-records" element={<SyncRecords />} />
 
           {/* Auth-protected routes */}
           <Route path="/" element={
