@@ -315,7 +315,7 @@ export default function SyncRecords() {
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{fmt(job.started_at)}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{fmt(job.finished_at)}</td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            {job.has_logs && (
+                            {job.has_logs ? (
                               <button
                                 onClick={() => navigate(`/sync-records/${job.id}/logs`)}
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors"
@@ -323,6 +323,8 @@ export default function SyncRecords() {
                                 <Eye className="h-3.5 w-3.5" />
                                 View
                               </button>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">No logs available</span>
                             )}
                           </td>
                         </tr>
