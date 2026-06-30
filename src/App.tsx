@@ -10,6 +10,7 @@ import Detections from './pages/Detections';
 import Reports from './pages/Reports';
 import Upload from './pages/Upload';
 import SyncRecords from './pages/SyncRecords';
+import SyncJobLogs from './pages/SyncJobLogs';
 import StaticNumberplate from './pages/StaticNumberplate';
 
 const queryClient = new QueryClient({
@@ -30,6 +31,7 @@ function App() {
           {/* Public routes — no auth required */}
           <Route path="/static-numberplate" element={<StaticNumberplate />} />
           <Route path="/sync-records" element={<SyncRecords />} />
+          <Route path="/sync-records/:id/logs" element={<SyncJobLogs />} />
 
           {/* Auth-protected routes */}
           <Route path="/" element={

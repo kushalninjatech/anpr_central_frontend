@@ -225,12 +225,36 @@ export interface SyncJob {
   fail_count: number;
   skipped_count: number;
   progress_percent: number;
+  has_logs: boolean;
   celery_task_id: string | null;
   error_message: string | null;
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type SyncJobLogStatus = 'sent' | 'skipped' | 'failed';
+
+export interface SyncJobLogEntry {
+  id: number;
+  sync_job_id: number;
+  detection_id: number;
+  organization_name: string | null;
+  external_org_id: string | null;
+  camera_id: string | null;
+  external_device_id: string | null;
+  numberplate_text: string | null;
+  is_sent: boolean;
+  log_status: SyncJobLogStatus;
+  error_message: string | null;
+  external_vehicle_id: string | null;
+  created_at: string;
+}
+
+export interface SyncJobLogsResponse {
+  logs: SyncJobLogEntry[];
+  total: number;
 }
 
 export interface SyncJobCreate {

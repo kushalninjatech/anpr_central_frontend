@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'react-toastify';
@@ -18,6 +19,7 @@ import {
   SkipForward,
   CloudUpload,
   CalendarClock,
+  Eye,
 } from 'lucide-react';
 import { syncJobApi } from '../services/api';
 import type { SyncJob, SyncJobStatus, SyncJobCreate } from '../types';
@@ -80,6 +82,7 @@ function StatusBadge({ status, size = 'sm' }: { status: SyncJobStatus; size?: 's
 
 export default function SyncRecords() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [page, setPage] = useState(0); // 0-indexed for Pagination component
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
@@ -171,7 +174,7 @@ export default function SyncRecords() {
 
       {/* Sticky header */}
       <header className="sticky top-0 z-30 bg-white/70 backdrop-blur-xl border-b border-white/60 shadow-sm shadow-gray-200/40">
-        <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+        <div className="w-full px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl shadow-lg shadow-primary-500/30">
               <CloudUpload className="h-6 w-6 text-white" />
@@ -191,7 +194,7 @@ export default function SyncRecords() {
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-6 py-8 space-y-8">
+      <main className="w-full px-6 py-8 space-y-8">
         {/* Current job section */}
         <section className="space-y-3">
           <div className="flex items-center gap-2">
@@ -264,32 +267,33 @@ export default function SyncRecords() {
             <>
               <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl shadow-gray-200/50 border border-white/50 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="table-modern">
-                    <thead>
+                  <table className="min-w-full divide-y divide-gray-100">
+                    <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50">
                       <tr>
-                        <th>Job</th>
-                        <th>Status</th>
-                        <th>Window</th>
-                        <th>Progress</th>
-                        <th className="text-right">Synced</th>
-                        <th className="text-right">Skipped</th>
-                        <th className="text-right">Failed</th>
-                        <th className="text-right">Total</th>
-                        <th>Started</th>
-                        <th>Finished</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">Job</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">Window</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">Progress</th>
+                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">Synced</th>
+                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">Skipped</th>
+                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">Failed</th>
+                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">Total</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">Started</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">Finished</th>
+                        <th className="px-4 py-3"></th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-gray-50">
                       {jobs.map((job) => (
-                        <tr key={job.id}>
-                          <td className="font-bold text-gray-900">#{job.id}</td>
-                          <td><StatusBadge status={job.status} /></td>
-                          <td className="text-sm text-gray-600 whitespace-nowrap">
+                        <tr key={job.id} className="transition-colors duration-150 hover:bg-primary-50/30">
+                          <td className="px-4 py-3 whitespace-nowrap font-bold text-gray-900">#{job.id}</td>
+                          <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={job.status} /></td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                             {fmt(job.from_datetime)}
                             <ArrowRight className="inline h-3 w-3 mx-1.5 text-gray-300" />
                             {fmt(job.to_datetime)}
                           </td>
-                          <td className="min-w-[140px]">
+                          <td className="px-4 py-3 whitespace-nowrap w-[160px]">
                             <div className="flex items-center gap-2">
                               <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                 <div
@@ -297,19 +301,32 @@ export default function SyncRecords() {
                                   style={{ width: `${Math.min(100, Math.max(0, job.progress_percent || 0))}%` }}
                                 />
                               </div>
-                              <span className="text-xs font-medium text-gray-500 w-9 text-right">
+                              <span className="text-xs font-medium text-gray-500 w-9 text-right shrink-0">
                                 {(job.progress_percent || 0).toFixed(0)}%
                               </span>
                             </div>
                           </td>
-                          <td className="text-right font-semibold text-emerald-600">{job.success_count}</td>
-                          <td className="text-right text-gray-500">{job.skipped_count}</td>
-                          <td className={`text-right font-semibold ${job.fail_count > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                          <td className="px-4 py-3 whitespace-nowrap text-right font-semibold text-emerald-600">{job.success_count}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-right text-gray-500">{job.skipped_count}</td>
+                          <td className={`px-4 py-3 whitespace-nowrap text-right font-semibold ${job.fail_count > 0 ? 'text-red-600' : 'text-gray-400'}`}>
                             {job.fail_count}
                           </td>
-                          <td className="text-right text-gray-700 font-medium">{job.total_records}</td>
-                          <td className="text-sm text-gray-500 whitespace-nowrap">{fmt(job.started_at)}</td>
-                          <td className="text-sm text-gray-500 whitespace-nowrap">{fmt(job.finished_at)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-right text-gray-700 font-medium">{job.total_records}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{fmt(job.started_at)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{fmt(job.finished_at)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {job.has_logs ? (
+                              <button
+                                onClick={() => navigate(`/sync-records/${job.id}/logs`)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">No logs available</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

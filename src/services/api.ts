@@ -17,6 +17,7 @@ import type {
   SyncJob,
   SyncJobCreate,
   SyncJobListResponse,
+  SyncJobLogsResponse,
 } from '../types';
 
 // Dynamically determine API base URL based on hostname
@@ -281,4 +282,9 @@ export const syncJobApi = {
 
   cancel: () =>
     publicApi.post<SyncJob>(`${API_V1_PREFIX}/sync-jobs/cancel`),
+
+  getLogs: (id: number, page = 1, pageSize = 10) =>
+    publicApi.get<SyncJobLogsResponse>(`${API_V1_PREFIX}/sync-jobs/${id}/logs`, {
+      params: { page, page_size: pageSize },
+    }),
 };
